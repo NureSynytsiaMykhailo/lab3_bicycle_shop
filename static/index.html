@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bicycle Shop</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 16px; color: #222; }
+        section { margin: 20px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px; }
+        h1, h2, h3 { margin: 0 0 8px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+        th, td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
+        tr.row { cursor: pointer; }
+        tr.row:hover { background: #f3f7ff; }
+        input, select, button { padding: 6px 8px; margin: 4px 4px 4px 0; }
+        .msg { margin-top: 8px; padding: 8px 10px; border-radius: 6px; display: none; }
+        .ok  { display: block; background: #e6f6ea; color: #14532d; }
+        .err { display: block; background: #fde8e8; color: #7f1d1d; }
+    </style>
+</head>
+<body>
+<h1>Bicycle Shop</h1>
+<div id="global_msg" class="msg"></div>
+
+<section>
+    <h2>Товари</h2>
+    <p>Натисніть на товар, щоб побачити його деталі та всі продажі.</p>
+    <div id="products"></div>
+    <div id="details"></div>
+</section>
+
+<section>
+    <h2>Замовлення</h2>
+    <p>Натисніть на чек, щоб побачити всі товари в ньому.</p>
+    <div id="orders"></div>
+    <div id="order_details"></div>
+</section>
+
+<section>
+    <h2>Додати продаж</h2>
+    <form id="sale_form">
+        <input id="product_name" list="product_list" placeholder="Назва товару" required>
+        <datalist id="product_list"></datalist>
+        <input id="quantity" type="number" value="1" placeholder="Кількість">
+        <input id="order_id" type="number" placeholder="№ чека (порожньо = новий)">
+        <select id="customer_id"></select>
+        <button type="submit">Додати</button>
+    </form>
+    <div id="sale_msg" class="msg"></div>
+</section>
+
+<section>
+    <h2>Додати товар</h2>
+    <form id="product_form">
+        <input id="new_name" placeholder="Назва" required>
+        <input id="new_price" type="number" step="0.01" placeholder="Ціна" required>
+        <input id="new_qty" type="number" placeholder="Кількість" required>
+        <button type="submit">Додати</button>
+    </form>
+    <div id="product_msg" class="msg"></div>
+</section>
+
+<section>
+    <h2>Функції</h2>
+    <div>
+        <input id="fn_date" type="date" value="2026-11-01">
+        <button id="btn_most">Найдорожчий проданий товар</button>
+        <button id="btn_sold">Усі продані товари за датою</button>
+    </div>
+    <div>
+        <input id="fn_price" type="number" value="25000">
+        <button id="btn_count">Скільки товарів дешевше за ціну</button>
+    </div>
+    <div id="fn_msg" class="msg"></div>
+    <div id="fn_table"></div>
+</section>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+    const LABELS = {
+      id_product: "ID", Pname: "Назва", article: "Артикул", Pprice: "Ціна", quantity: "Кількість",
+      sold: "Продано", id_order: "Чек", orderDate: "Дата", orderStatus: "Статус",
+      customer: "Клієнт", number: "Кількість", price: "Ціна", line_sum: "Сума",
+      qty: "Кількість", sum: "Сума",
+      items: "Позицій", total: "Сума чека",
+    };
+    const fmt = (v) => v === null ? "" :
+      (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v)) ? v.replace("T", " ").slice(0, 16) : v;
+
+    async function api(path, options) {
+      const res = await fetch(path, options);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const d = data.detail;
+        throw new Error(Array.isArray(d) ? d.map((x) => x.msg).join("; ") : (d || res.statusText));
+      }
+      return data;
+    }
+
+    function show(el, text, ok) { el.textContent = text; el.className = "msg " + (ok ? "ok" : "err"); }
+
+    function renderTable(el, rows, onRow) {
+      el.replaceChildren();
+      if (!rows.length) { el.textContent = "Немає даних"; return; }
+      const cols = Object.keys(rows[0]);
+      const table = document.createElement("table");
+      const head = table.insertRow();
+      cols.forEach((c) => head.appendChild(Object.assign(document.createElement("th"), { textContent: LABELS[c] || c })));
+      rows.forEach((r) => {
+        const tr = table.insertRow();
+        if (onRow) { tr.className = "row"; tr.onclick = () => onRow(r); }
+        cols.forEach((c) => { tr.insertCell().textContent = fmt(r[c]); });
+      });
+      el.appendChild(table);
+    }
+
+    async function guard(fn) {
+      try { await fn(); } catch (err) { show($("global_msg"), err.message, false); }
+    }
+
+    async function loadProducts() {
+      const products = await api("/api/products");
+      renderTable($("products"), products, (r) => guard(() => showDetails(r.id_product)));
+      $("product_list").replaceChildren(...products.map((p) => new Option(p.Pname)));
+    }
+
+    async function showDetails(id) {
+      const d = await api("/api/products/" + id);
+      const p = d.product;
+      const h = document.createElement("h3");
+      h.textContent = `${p.Pname} (${p.article ?? "—"})`;
+      const info = document.createElement("p");
+      info.textContent = `Ціна: ${p.Pprice} · На складі: ${p.quantity} · Продано: ${d.total_sold} · Опис: ${p.Description ?? "—"}`;
+      const sales = document.createElement("div");
+      renderTable(sales, d.sales);
+      $("details").replaceChildren(h, info, sales);
+    }
+
+    async function loadOrders() {
+      const orders = await api("/api/orders");
+      renderTable($("orders"), orders, (r) => guard(() => showOrder(r.id_order)));
+    }
+
+    async function showOrder(id) {
+      const d = await api("/api/orders/" + id);
+      const o = d.order;
+      const h = document.createElement("h3");
+      h.textContent = `Чек №${o.id_order}`;
+      const info = document.createElement("p");
+      info.textContent = `Дата: ${fmt(o.orderDate)} · Статус: ${o.orderStatus} · Клієнт: ${o.customer} (${o.email}) · Адреса: ${o.address} · Сума: ${d.total}`;
+      const items = document.createElement("div");
+      renderTable(items, d.items);
+      $("order_details").replaceChildren(h, info, items);
+    }
+
+    async function loadCustomers() {
+      const list = await api("/api/customers");
+      $("customer_id").replaceChildren(
+        new Option("— клієнт (для нового чека) —", ""),
+        ...list.map((c) => new Option(`${c.Fname} ${c.Lname}`, c.id_customer)),
+      );
+    }
+
+    $("sale_form").onsubmit = async (e) => {
+      e.preventDefault();
+      const num = (id) => ($(id).value === "" ? null : Number($(id).value));
+      try {
+        const r = await api("/api/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            product_name: $("product_name").value,
+            quantity: num("quantity") ?? 1,
+            order_id: num("order_id"),
+            customer_id: num("customer_id"),
+          }),
+        });
+        show($("sale_msg"), `Продаж додано, чек №${r.id_order}`, true);
+        guard(loadProducts);
+        guard(loadOrders);
+      } catch (err) {
+        show($("sale_msg"), err.message, false);   // повідомлення виключення з SQL Server
+      }
+    };
+
+    $("product_form").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: $("new_name").value,
+            price: Number($("new_price").value),
+            quantity: Number($("new_qty").value),
+          }),
+        });
+        show($("product_msg"), `Товар «${r.name}» додано`, true);
+        guard(loadProducts);
+      } catch (err) {
+        show($("product_msg"), err.message, false);
+      }
+    };
+
+    $("btn_most").onclick = () => guard(async () => {
+      const r = await api("/api/functions/most-expensive?sale_date=" + $("fn_date").value);
+      $("fn_table").replaceChildren();
+      show($("fn_msg"), `MostExpensiveSold: ${r.result}`, true);
+    });
+
+    $("btn_sold").onclick = () => guard(async () => {
+      const rows = await api("/api/functions/sold-products?sale_date=" + $("fn_date").value);
+      $("fn_msg").className = "msg";
+      renderTable($("fn_table"), rows);
+    });
+
+    $("btn_count").onclick = () => guard(async () => {
+      const r = await api("/api/functions/count-goods?price=" + $("fn_price").value);
+      $("fn_table").replaceChildren();
+      show($("fn_msg"), `ct_goods(${r.price}): ${r.result}`, true);
+    });
+
+    guard(loadProducts);
+    guard(loadCustomers);
+    guard(loadOrders);
+</script>
+</body>
+</html>

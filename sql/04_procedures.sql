@@ -68,3 +68,14 @@ BEGIN
     SELECT @OrderId AS id_order, @ProductId AS id_product, @Quantity AS quantity;
 END
 GO
+
+CREATE OR ALTER PROCEDURE dbo.insert_product
+    @new_name NVARCHAR(150),
+    @new_price DECIMAL(10, 2),
+    @new_qty INT
+AS
+BEGIN
+    INSERT INTO Product (Pname, Pprice, quantity)
+    VALUES (@new_name, @new_price, @new_qty);
+END
+GO

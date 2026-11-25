@@ -12,7 +12,6 @@ import db
 
 app = FastAPI(
     title="Bicycle Shop API",
-    description="REST API над БД bicycle_shop (SQL Server)",
 )
 
 NOT_FOUND = {50001, 50004}
@@ -24,7 +23,7 @@ async def db_error_handler(request: Request, exc: pyodbc.Error):
     if code is not None and 50000 <= code < 60000:
         status = 404 if code in NOT_FOUND else 400
         return JSONResponse(status_code=status, content={"code": code, "detail": msg})
-    return JSONResponse(status_code=500, content={"code": code, "detail": f"Помилка БД>: {msg}"})
+    return JSONResponse(status_code=500, content={"code": code, "detail": f"Помилка БД: {msg}"})
 
 
 @app.get("/api/products", summary="Список товарів")
@@ -53,7 +52,7 @@ def product_details(product_id: int):
                   c.Fname + N' ' + c.Lname AS customer,
                   d.number, d.price, d.number * d.price AS line_sum
            FROM Details d
-           JOIN [Order] o  ON o.id_order    = d.id_order
+           JOIN [Order] o ON o.id_order = d.id_order
            JOIN Customer c ON c.id_customer = o.id_customer
            WHERE d.id_product = ?
            ORDER BY o.orderDate DESC, o.id_order DESC""",

@@ -70,12 +70,12 @@ END
 GO
 
 CREATE OR ALTER PROCEDURE dbo.insert_product
-    @new_name NVARCHAR(150),
+    @new_name  NVARCHAR(150),
     @new_price DECIMAL(10, 2),
-    @new_qty INT
+    @new_qty   INT
 AS
 BEGIN
-    INSERT INTO Product (Pname, Pprice, quantity)
-    VALUES (@new_name, @new_price, @new_qty);
+    INSERT INTO Product (Pname, article, Pprice, quantity)
+    VALUES (@new_name, N'AUTO-' + CONVERT(NVARCHAR(36), NEWID()), @new_price, @new_qty);
 END
 GO

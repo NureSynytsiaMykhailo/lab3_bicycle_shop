@@ -76,6 +76,7 @@ CREATE OR ALTER PROCEDURE dbo.insert_product
 AS
 BEGIN
     INSERT INTO Product (Pname, article, Pprice, quantity)
-    VALUES (@new_name, N'AUTO-' + CONVERT(NVARCHAR(36), NEWID()), @new_price, @new_qty);
+    SELECT @new_name, N'A-' + FORMAT(ISNULL(MAX(TRY_CAST(SUBSTRING(article, 3, 10) AS INT)), 0) + 1, '000'),
+    @new_price, @new_qty FROM Product WHERE article LIKE N'A-%';
 END
 GO
